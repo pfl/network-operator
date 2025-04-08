@@ -1,0 +1,14 @@
+name: validation public
+on:
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  validate:
+    steps:
+    - run: |
+        apt install libpcap-dev
+    - uses: "./.github/workflows/validate-common.yaml"
+      with:
+        runner: ubuntu-latest

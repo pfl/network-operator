@@ -1,20 +1,19 @@
-name: validate
+name: validation common
 on:
-  pull_request:
-    branches:
-      - 'main'
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
 
 permissions:
   pull-requests: read # for golangci/golangci-lint-action to fetch pull requests
   contents: read
 
-env:
-  LOCALBIN: /runners/tools/bin
-
 jobs:
   golangci:
     name: Run lint
-    runs-on: "self-hosted"
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -28,7 +27,7 @@ jobs:
           make lint
   build:
     name: Build all
-    runs-on: "self-hosted"
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -43,7 +42,7 @@ jobs:
       - run: make discover-image
   tests:
     name: Run tests
-    runs-on: "self-hosted"
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
