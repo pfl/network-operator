@@ -33,6 +33,52 @@ var _ = Describe("NetworkClusterPolicy Webhook", func() {
 
 			Expect(nc.Spec.GaudiScaleOut.Image).To(BeEquivalentTo("intel/intel-network-linkdiscovery:latest"))
 		})
+
+		It("Should fill in the default RDMA device class name if it is empty", func() {
+			nc := NetworkClusterPolicy{}
+
+			nc.Spec.ConfigurationType = hostNicScaleOut
+			nc.Spec.HostNicScaleOut.InstallDRANet = true
+			nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass = &RDMADeviceClassSpec{}
+
+			nc.Default()
+
+			Expect(nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass.Name).To(BeEquivalentTo(DefaultRDMADeviceClass))
+		})
+
+		It("Should keep an explicitly given RDMA device class name", func() {
+			nc := NetworkClusterPolicy{}
+
+			nc.Spec.ConfigurationType = hostNicScaleOut
+			nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass = &RDMADeviceClassSpec{
+				Name: "my-device-class",
+			}
+
+			nc.Default()
+
+			Expect(nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass.Name).To(BeEquivalentTo("my-device-class"))
+		})
+
+		It("Should not add an RDMA device class if none is requested", func() {
+			nc := NetworkClusterPolicy{}
+
+			nc.Spec.ConfigurationType = hostNicScaleOut
+
+			nc.Default()
+
+			Expect(nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass).To(BeNil())
+		})
+
+		It("Should not default the hostnic spec for other configuration types", func() {
+			nc := NetworkClusterPolicy{}
+
+			nc.Spec.ConfigurationType = gaudiScaleOut
+			nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass = &RDMADeviceClassSpec{}
+
+			nc.Default()
+
+			Expect(nc.Spec.HostNicScaleOut.Dranet.RDMADeviceClass.Name).To(BeEmpty())
+		})
 	})
 
 	Context("When creating NetworkClusterPolicy under Validating Webhook", func() {
@@ -149,6 +195,60 @@ var _ = Describe("NetworkClusterPolicy Webhook", func() {
 			}
 
 			Expect(nc.ValidateDelete()).Error().To(BeNil())
+		})
+
+		It("Should accept a hostnic configuration without a nodeSelector", func() {
+			nc := NetworkClusterPolicy{
+				Spec: NetworkClusterPolicySpec{
+					ConfigurationType: hostNicScaleOut,
+					HostNicScaleOut: HostNicScaleOutSpec{
+						InstallDRANet: true,
+					},
+				},
+			}
+
+			Expect(nc.ValidateCreate()).Error().To(BeNil())
+		})
+
+		It("Should accept a hostnic configuration with a named RDMA device class", func() {
+			nc := NetworkClusterPolicy{
+				Spec: NetworkClusterPolicySpec{
+					ConfigurationType: hostNicScaleOut,
+					HostNicScaleOut: HostNicScaleOutSpec{
+						InstallDRANet: true,
+						Dranet: DranetSpec{
+							RDMADeviceClass: &RDMADeviceClassSpec{
+								Name: "my-device-class",
+							},
+						},
+					},
+				},
+			}
+
+			Expect(nc.ValidateCreate()).Error().To(BeNil())
+			Expect(nc.ValidateUpdate(nc.DeepCopy())).Error().To(BeNil())
+		})
+
+		It("Should deny a hostnic configuration with an unnamed RDMA device class InputVal", func() {
+			nc := NetworkClusterPolicy{
+				Spec: NetworkClusterPolicySpec{
+					ConfigurationType: hostNicScaleOut,
+					HostNicScaleOut: HostNicScaleOutSpec{
+						InstallDRANet: true,
+						Dranet: DranetSpec{
+							RDMADeviceClass: &RDMADeviceClassSpec{},
+						},
+					},
+				},
+			}
+
+			Expect(nc.ValidateCreate()).Error().To(BeEquivalentTo(missingDeviceClassNameError{}))
+			Expect(missingDeviceClassNameError{}.Error()).NotTo(BeEmpty())
+
+			// Defaulting gives the device class a name, making the spec valid.
+			nc.Default()
+
+			Expect(nc.ValidateCreate()).Error().To(BeNil())
 		})
 	})
 })
