@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"io"
+	"os"
 	"slices"
 	"testing"
 
@@ -252,6 +253,74 @@ func TestMetricsOptions(t *testing.T) {
 
 		if len(opts.TLSOpts) != len(tlsOpts) {
 			t.Errorf("expected %d TLS options, got: %d", len(tlsOpts), len(opts.TLSOpts))
+		}
+	})
+}
+
+func TestOperatorNamespace(t *testing.T) {
+	t.Run("from environment", func(t *testing.T) {
+		t.Setenv("OPERATOR_NAMESPACE", "custom-namespace")
+
+		if ns := operatorNamespace(); ns != "custom-namespace" {
+			t.Errorf("expected the namespace to be 'custom-namespace', got: %s", ns)
+		}
+	})
+
+	t.Run("empty environment", func(t *testing.T) {
+		t.Setenv("OPERATOR_NAMESPACE", "")
+
+		if ns := operatorNamespace(); ns != defaultOperatorNamespace {
+			t.Errorf("expected the namespace to be %q, got: %s", defaultOperatorNamespace, ns)
+		}
+	})
+
+	t.Run("unset environment", func(t *testing.T) {
+		// Setenv first so that the cleanup of the test framework restores the
+		// original value of the variable.
+		t.Setenv("OPERATOR_NAMESPACE", "")
+
+		if err := os.Unsetenv("OPERATOR_NAMESPACE"); err != nil {
+			t.Fatalf("unable to unset the environment variable: %v", err)
+		}
+
+		if ns := operatorNamespace(); ns != defaultOperatorNamespace {
+			t.Errorf("expected the namespace to be %q, got: %s", defaultOperatorNamespace, ns)
+		}
+	})
+
+	if defaultOperatorNamespace != "intel-network-operator" {
+		t.Errorf("expected the default namespace to match the one of the deployment, got: %s",
+			defaultOperatorNamespace)
+	}
+}
+
+func TestWebhooksEnabled(t *testing.T) {
+	// Only the exact value 'false' turns the webhooks off.
+	for value, expected := range map[string]bool{
+		"false": false,
+		"true":  true,
+		"False": true,
+		"0":     true,
+		"":      true,
+	} {
+		t.Run("value "+value, func(t *testing.T) {
+			t.Setenv("ENABLE_WEBHOOKS", value)
+
+			if got := webhooksEnabled(); got != expected {
+				t.Errorf("expected %t for value %q, got: %t", expected, value, got)
+			}
+		})
+	}
+
+	t.Run("unset environment", func(t *testing.T) {
+		t.Setenv("ENABLE_WEBHOOKS", "")
+
+		if err := os.Unsetenv("ENABLE_WEBHOOKS"); err != nil {
+			t.Fatalf("unable to unset the environment variable: %v", err)
+		}
+
+		if !webhooksEnabled() {
+			t.Error("expected the webhooks to be enabled when the variable is unset")
 		}
 	})
 }
