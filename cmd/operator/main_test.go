@@ -209,6 +209,53 @@ func TestTLSOptionsIndependent(t *testing.T) {
 	}
 }
 
+func TestMetricsOptions(t *testing.T) {
+	tlsOpts := tlsOptions(false)
+
+	t.Run("insecure", func(t *testing.T) {
+		opts := metricsOptions("0", false, tlsOpts)
+
+		if opts.BindAddress != "0" {
+			t.Errorf("expected the bind address to be '0', got: %s", opts.BindAddress)
+		}
+
+		if opts.SecureServing {
+			t.Error("expected secure serving to be disabled")
+		}
+
+		// Without secure serving there is nothing to authenticate against.
+		if opts.FilterProvider != nil {
+			t.Error("expected no filter provider to be set")
+		}
+
+		if len(opts.TLSOpts) != len(tlsOpts) {
+			t.Errorf("expected %d TLS options, got: %d", len(tlsOpts), len(opts.TLSOpts))
+		}
+	})
+
+	t.Run("secure", func(t *testing.T) {
+		opts := metricsOptions(":8443", true, tlsOpts)
+
+		if opts.BindAddress != ":8443" {
+			t.Errorf("expected the bind address to be ':8443', got: %s", opts.BindAddress)
+		}
+
+		if !opts.SecureServing {
+			t.Error("expected secure serving to be enabled")
+		}
+
+		// A securely served endpoint must require authentication and
+		// authorization.
+		if opts.FilterProvider == nil {
+			t.Error("expected a filter provider to be set")
+		}
+
+		if len(opts.TLSOpts) != len(tlsOpts) {
+			t.Errorf("expected %d TLS options, got: %d", len(tlsOpts), len(opts.TLSOpts))
+		}
+	})
+}
+
 // TestSchemeRegistration verifies that the scheme handed to the manager knows
 // both the built in Kubernetes types the operator deploys and its own custom
 // resource.
